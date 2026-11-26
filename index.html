@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>多多岛 3D 沙盘小火车 | Sodor Railway Sandbox</title>
+  <link rel="stylesheet" href="styles.css?v=40" />
+</head>
+<body>
+  <div id="canvas-wrap"></div>
+
+  <!-- Top Left Info & View Actions -->
+  <div class="hud-top-left">
+    <div class="title-card">
+      <div class="title-row">
+        <span class="badge-num">1</span>
+        <h1>多多岛 3D 沙盘铁道</h1>
+      </div>
+      <div class="sub-status">当前路段：<strong id="edge-name">纳普福特站台线</strong></div>
+    </div>
+    <div class="top-actions">
+      <button id="btn-camera" class="pill-btn" title="快捷键 V">视角：沙盘上帝</button>
+      <button id="btn-mute" class="pill-btn" title="快捷键 M">音效：开</button>
+      <button id="btn-view-crossing" class="pill-btn crossing-btn" title="镜头快速定位到 S5 公路铁路平交道口">🚦 看道口</button>
+      <button id="btn-spawn-rogue" class="pill-btn rogue-btn" title="立刻放行一辆强行闯道口栏杆的汽车 (快捷键 G)">⚠️ 闯栏杆 (G)</button>
+      <button id="btn-sim-crash" class="pill-btn sim-crash-btn" title="一键模拟高速火车撞击随机大型工程车并脱轨侧翻、车厢脱节 (快捷键 C)">💥 模拟撞车脱轨 (C)</button>
+      <button id="btn-rerail" class="pill-btn rerail-btn hidden" title="瞬间把脱轨侧翻的火车摆正上轨 (快捷键 Z)">🚂 一键复轨 (Z)</button>
+      <button id="btn-heli-rerail" class="pill-btn heli-rerail-btn hidden" title="召唤重型救援直升机把散落的车厢逐节吊装回轨道 (快捷键 U)">🚁 直升机吊装复轨 (U)</button>
+      <button id="btn-help" class="pill-btn help-btn" title="小朋友怎么玩？点击看指南">📖 玩法说明</button>
+    </div>
+  </div>
+
+  <!-- Top Right Live Minimap -->
+  <div class="hud-top-right">
+    <div class="minimap-head">
+      <span>铁道实时调度图</span>
+      <span class="minimap-tip">点击圆点可扳道岔</span>
+    </div>
+    <canvas id="minimap" width="270" height="186"></canvas>
+  </div>
+
+  <!-- Toast Banner -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Bottom Control Deck -->
+  <div class="hud-bottom">
+    <div class="switch-row">
+      <span class="row-label">道岔切换</span>
+      <div id="switch-bar" class="switch-bar"></div>
+      <button id="btn-flip-ahead" class="flip-ahead-btn" title="快捷键 F">切换前方道岔 (F)</button>
+    </div>
+
+    <div class="drive-row">
+      <div class="speedo">
+        <span id="speed-value">0</span>
+        <span class="speed-unit">km/h</span>
+      </div>
+
+      <div class="throttle-box">
+        <div class="throttle-head">
+          <span>蒸汽油门推杆</span>
+          <span id="throttle-pct">0%</span>
+        </div>
+        <input id="throttle-slider" type="range" min="0" max="100" value="0" />
+      </div>
+
+      <div class="ctrl-buttons">
+        <button id="btn-reverse" class="ctrl-btn" title="快捷键 R">档位：前进 D</button>
+        <button id="btn-brake" class="ctrl-btn brake" title="快捷键 Space">刹车 (Space)</button>
+        <button id="btn-estop" class="ctrl-btn estop" title="快捷键 X">急停 (X)</button>
+        <button id="btn-whistle" class="ctrl-btn whistle" title="快捷键 H">鸣笛 (H)</button>
+      </div>
+    </div>
+
+    <div class="key-hints">
+      操作：<kbd>W</kbd>/<kbd>S</kbd> 油门与刹车 · <kbd>X</kbd> 急停 · <kbd>R</kbd> 倒车 · <kbd>H</kbd> 鸣笛吓停闯卡车 · <kbd>1</kbd>~<kbd>6</kbd>/<kbd>8</kbd> 或 <kbd>F</kbd> 道岔 · <kbd>V</kbd> 视角 · <kbd>G</kbd> 闯栏杆 · <kbd>C</kbd> 模拟脱轨 · <kbd>Z</kbd> 一键复轨 · <kbd>U</kbd> 直升机复轨
+    </div>
+  </div>
+
+  <!-- Top-Center Train Preset & Custom Consist Dock -->
+  <div id="fleet-dock" class="hud-panel">
+    <span class="fleet-label">列车编组</span>
+    <select id="preset-select" title="切换预设列车编组"></select>
+    <button id="btn-open-builder" class="hud-btn" type="button">自定义组装</button>
+    <span id="model-loading-badge" class="loading-badge hidden">加载模型中...</span>
+  </div>
+
+  <!-- Custom Train Builder Modal -->
+  <div id="custom-builder-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="builder-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h2 id="builder-title">自定义列车编组工厂</h2>
+          <p id="builder-subtitle" class="modal-sub">自由搭配机车车头、车厢型号与总节数（高速动车组头车计入总节数）</p>
+        </div>
+        <button id="builder-close" class="modal-close" type="button" title="关闭">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="builder-row">
+          <label for="builder-loco-select">第 1 节（车头 / 动车头车）</label>
+          <select id="builder-loco-select"></select>
+        </div>
+
+        <div class="builder-row">
+          <label>总节数（含车头） <span id="builder-count-note" class="count-note"></span></label>
+          <div class="count-controls">
+            <div id="builder-count-presets" class="count-pills"></div>
+            <input id="builder-count-input" type="number" min="1" max="16" value="4" />
+            <span class="unit-label">节</span>
+          </div>
+        </div>
+
+        <div id="builder-tail-option-row" class="builder-row builder-check-row hidden">
+          <label class="check-label">
+            <input id="builder-emu-tail-chk" type="checkbox" checked />
+            <span>动车组末节自动配置流线尾车（双端流线）</span>
+          </label>
+        </div>
+
+        <div class="builder-row">
+          <label>批量统型设置（第 2 ~ N 节）</label>
+          <div class="unified-controls">
+            <select id="builder-unified-car"></select>
+            <button id="builder-fill-all" class="hud-btn" type="button">全部填充此车型</button>
+          </div>
+        </div>
+
+        <div id="builder-livery-container" class="builder-livery-container hidden">
+          <div id="builder-df4d-livery-section" class="livery-card hidden">
+            <div class="livery-card-head">
+              <div class="livery-card-title">
+                <span>DF4D 机车涂装</span>
+                <span id="df4d-livery-badge" class="livery-mode-badge">经典红白</span>
+              </div>
+              <button id="btn-sync-df4d-to-mark3" class="livery-sync-btn hidden" type="button" title="将当前 DF4D 机车配色同步到客车">同步到客车 ↓</button>
+            </div>
+            <div id="df4d-livery-presets" class="livery-presets"></div>
+            <div class="livery-editor-layout">
+              <div id="df4d-livery-preview" class="livery-preview" title="5区涂装层叠预览"></div>
+              <div id="df4d-livery-pickers" class="livery-pickers"></div>
+            </div>
+          </div>
+
+          <div id="builder-hxd3d-livery-section" class="livery-card hidden">
+            <div class="livery-card-head">
+              <div class="livery-card-title">
+                <span>和谐 HXD3D 机车涂装</span>
+                <span id="hxd3d-livery-badge" class="livery-mode-badge">经典红</span>
+              </div>
+            </div>
+            <div class="livery-presets">
+              <button type="button" class="livery-preset-btn active" data-hxd3d-color="red">
+                <span class="livery-preset-swatch"><span style="background:#c81e1e"></span><span style="background:#d9362b"></span></span>
+                <span>经典中国红</span>
+              </button>
+              <button type="button" class="livery-preset-btn" data-hxd3d-color="blue">
+                <span class="livery-preset-swatch"><span style="background:#0d63cc"></span><span style="background:#1b79eb"></span></span>
+                <span>天蓝涂装</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="builder-mark3-livery-section" class="livery-card hidden">
+            <div class="livery-card-head">
+              <div class="livery-card-title">
+                <span>Mark 3 客车涂装（标准/餐车）</span>
+                <span id="mark3-livery-badge" class="livery-mode-badge">复古铁路绿</span>
+              </div>
+              <button id="btn-sync-mark3-from-df4d" class="livery-sync-btn hidden" type="button" title="从 DF4D 机车复制同一套配色">同步机车配色 ↑</button>
+            </div>
+            <div id="mark3-livery-presets" class="livery-presets"></div>
+            <div class="livery-editor-layout">
+              <div id="mark3-livery-preview" class="livery-preview" title="5区涂装层叠预览"></div>
+              <div id="mark3-livery-pickers" class="livery-pickers"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="builder-row">
+          <label>各节车厢明细（第 1 节为车头）</label>
+          <div id="builder-car-slots" class="car-slots"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="builder-cancel" class="hud-btn btn-secondary" type="button">取消</button>
+        <button id="builder-apply" class="hud-btn btn-primary" type="button">确认编组并上轨</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kid-Friendly Gameplay Guide Modal -->
+  <div id="help-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <div class="modal-card help-modal-card">
+      <div class="modal-header">
+        <div>
+          <h2 id="help-title">🚂 多多岛小火车玩法说明</h2>
+          <p class="modal-sub">超简单上手指南：开火车、扳道岔、守护平交道口！</p>
+        </div>
+        <button id="help-close" class="modal-close" type="button" title="关闭">✕</button>
+      </div>
+      <div class="modal-body help-body">
+        <div class="help-item">
+          <span class="help-icon">🚀</span>
+          <div>
+            <strong>开动小火车</strong>
+            <p>拖动下方「蒸汽油门推杆」或按 <kbd>W</kbd> 加速出发，<kbd>Space</kbd> 刹车，<kbd>X</kbd> 急停，<kbd>R</kbd> 倒车。</p>
+          </div>
+        </div>
+        <div class="help-item">
+          <span class="help-icon">🔀</span>
+          <div>
+            <strong>切换路线（扳道岔）</strong>
+            <p>点击右上角地图上的彩色圆点、下方道岔按钮或按 <kbd>F</kbd>，就能把火车开上高架桥、山体隧道、海港或支线！</p>
+          </div>
+        </div>
+        <div class="help-item">
+          <span class="help-icon">😊</span>
+          <div>
+            <strong>和托马斯互动</strong>
+            <p>选「托马斯」车头时，用鼠标左键点一点托马斯的笑脸，它会切换 5 种搞笑表情并开口说话！</p>
+          </div>
+        </div>
+        <div class="help-item">
+          <span class="help-icon">🎺</span>
+          <div>
+            <strong>守护平交道口（鸣笛救险）</strong>
+            <p>看到闪着红黄光圈的违章车想闯栏杆？快按 <kbd>H</kbd> 或点「鸣笛」把它吓停！或者减速礼让避免碰撞。</p>
+          </div>
+        </div>
+        <div class="help-item">
+          <span class="help-icon">💥</span>
+          <div>
+            <strong>碰撞脱轨与直升机吊装复轨</strong>
+            <p>车速过快撞上大型工程车会让火车<b>脱轨侧翻、车厢脱节</b>！点「<b>💥 模拟撞车脱轨</b>」可一键体验；脱轨后可以点「<b>🚂 一键复轨</b>」瞬间恢复，也可以点「<b>🚁 直升机吊装复轨</b>」召唤救援直升机把每节车厢吊回铁轨！</p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="help-ok" class="hud-btn btn-primary" type="button">我知道啦，去开火车！</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/three.min.js"></script>
+  <script src="vendor/OrbitControls.js"></script>
+  <script src="vendor/GLTFLoader.js"></script>
+  <script src="js/audio.js?v=43"></script>
+  <script src="js/track.js?v=43"></script>
+  <script src="js/scenery.js?v=43"></script>
+  <script src="js/traffic.js?v=43"></script>
+  <script src="js/models.js?v=43"></script>
+  <script src="js/train.js?v=43"></script>
+  <script src="js/rescue.js?v=43"></script>
+  <script src="js/main.js?v=43"></script>
+</body>
+</html>
